@@ -7,6 +7,18 @@ outputs to standard output with HTML
 formatting.
 
 ========================================
+Updated by Petro Dudi on 20190127
+- Adapted for Python 3.x
+- Added bad_chars_sub() to replace 
+  subject fields containing "/" and "\" 
+  with "-", and return a string of 50 
+  chars max
+- Added unicode support when writing 
+  decompressed body field to file
+- Prints account names and number of 
+  processed emails to standard output
+
+========================================
 Updated by CBRYCE on 20150107
 
 Added ability to feed directory or
@@ -23,6 +35,7 @@ information.
 '''
 
 import sys
+import os
 import time
 import sqlite3
 import zlib
@@ -54,6 +67,14 @@ def bad_chars(string):
             string = string.replace(char, '')
     return string
 
+def bad_chars_sub(string):
+    '''Removes / and \ from string.
+    Returns cleaned string.'''
+    for char in ['/', '\\']:
+        if char in string:
+            string = string.replace(char, '-')
+    return string[0:50]
+
 
 def main(path, outputPath):
     con = sqlite3.connect(path)
@@ -79,30 +100,32 @@ def main(path, outputPath):
         em_subject  = row[8]
         em_body     = row[9]
 
-        outputFile = open(outputPath+"/"+str(em_id)+"__"+str(em_subject), 'w')
+        outputFile = open(outputPath+"/"+str(em_id)+"__"+bad_chars_sub(em_subject)+".html", 'w')
 
         outputFile.write('<html><body>')
         write_css(outputFile)
 
         outputFile.write('<div class="content"><div class="header">''<strong>ID:</strong>' + str(em_id) +
-                         '<br><br>'+'<strong>From:</strong>' + bad_chars(em_faddress).encode('utf-8') + '<br>' +
+                         '<br><br>'+'<strong>From:</strong>' + bad_chars(em_faddress) + '<br>' +
                          '<strong>Date Received (UTC +0):</strong>' + epoch_to_date(em_rdate) + '<br><br>' +
-                         '<strong>To:</strong>' + bad_chars(em_taddress).encode('utf-8') + '<br>' +
+                         '<strong>To:</strong>' + bad_chars(em_taddress) + '<br>' +
                          '<strong>Date Sent (UTC +0):</strong>' + epoch_to_date(em_sdate) + '<br><br>'
-                         '<strong>CC:</strong>' + bad_chars(em_caddress).encode('utf-8') + '<br>' +
-                         '<strong>BCC:</strong>' + bad_chars(em_baddress).encode('utf-8') + '<br>' +
-                         '<strong>Reply-To Address:</strong>' + bad_chars(em_raddress).encode('utf-8') +
+                         '<strong>CC:</strong>' + bad_chars(em_caddress) + '<br>' +
+                         '<strong>BCC:</strong>' + bad_chars(em_baddress) + '<br>' +
+                         '<strong>Reply-To Address:</strong>' + bad_chars(em_raddress) +
                          '<br><br>' + '</div><div class="body">' +
-                         '<strong>Subject:</strong>' + em_subject.encode('utf-8') + '<br><br>' +
+                         '<strong>Subject:</strong>' + str(em_subject) + '<br><br>' +
                          '<strong>Body:</strong><br>')
 
         if em_body:
             dem_body = zlib.decompress(em_body)
-            outputFile.write(dem_body)
+            outputFile.write(dem_body.decode('utf-8'))
         outputFile.write('</div></div>')
         email_count += 1
-    outputFile.write('</body></html>')
-    #print email_count
+        outputFile.write('</body></html>')
+    
+    accountNamePrint = os.path.basename(outputPath)
+    print(accountNamePrint + ': ' + str(email_count) + ' emails')
 
     cur.close()
     con.close()
@@ -117,15 +140,6 @@ def scan_for_files(path):
 
     for root, subdirs, files in os.walk(path):
         for fileEntry in files:
-            # if fileEntry.startswith('internal.') and fileEntry.endswith('.db') and fileEntry.__contains__('@'):
-            #     accountNameInternal = fileEntry.strip('internal.')
-            #     accountNameInternal = accountNameInternal.strip('.db')
-            #
-            #     account_info['account'] = accountNameInternal
-            #     account_info['path'] = os.path.join(root, fileEntry)
-            #
-            #     filesToProcess.append(account_info)
-            #     account_info = dict()
 
             if fileEntry.startswith('mailstore.') and fileEntry.endswith('.db') and fileEntry.__contains__('@'):
                 accountNameInternal = fileEntry.split('mailstore.', 1)[1]
